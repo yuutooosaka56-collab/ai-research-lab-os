@@ -24,3 +24,5 @@
 - Claim/Evidence and cross-agent semantic validation
 - Confidence-label, timing, duplicate-ID, and secret detection checks
 - Python project configuration and validation tests
+- GitHub Actions CI workflow for Python 3.11 and 3.14
+- CI badge and local test instructions in README
