@@ -38,6 +38,15 @@ Evidence-aware Answer
 - [Agent Protocol](docs/03_Protocols/AgentProtocol.md)
 - [Evaluation Rubric](docs/04_Evaluation/EvaluationRubric.md)
 
+## Machine-readable Schemas
+
+- [Common Types](src/schemas/common.schema.json)
+- [Researcher Output](src/schemas/researcher.schema.json)
+- [Skeptic Output](src/schemas/skeptic.schema.json)
+- [Synthesizer Output](src/schemas/synthesizer.schema.json)
+
+The schemas use JSON Schema Draft 2020-12 and are intended for Orchestrator-side validation before outputs are accepted or passed to the next agent.
+
 ## Repository Structure
 
 ```text
@@ -52,6 +61,7 @@ ai-research-lab-os/
 │   ├── 03_Protocols/
 │   └── 04_Evaluation/
 ├── src/
+│   └── schemas/
 ├── tests/
 └── examples/
 ```
