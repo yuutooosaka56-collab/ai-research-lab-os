@@ -16,3 +16,7 @@
 - Evaluation Rubric
 - MVP Architecture
 - Agent Protocol
+- Common JSON Schema definitions
+- Researcher output schema
+- Skeptic output schema
+- Synthesizer output schema
