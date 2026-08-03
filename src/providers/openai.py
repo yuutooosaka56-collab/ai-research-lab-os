@@ -56,9 +56,13 @@ class OpenAIProvider:
 
         self._model = normalized_model
         self._max_output_tokens = max_output_tokens
-        self._client = client or self._build_client(
-            api_key=api_key,
-            timeout_seconds=timeout_seconds,
+        self._client = (
+            client
+            if client is not None
+            else self._build_client(
+                api_key=api_key,
+                timeout_seconds=timeout_seconds,
+            )
         )
 
     @classmethod
