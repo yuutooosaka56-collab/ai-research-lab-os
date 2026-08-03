@@ -20,6 +20,9 @@ openai = [
   "openai>=2.46,<3",
 ]
 
+[project.scripts]
+ai-research-smoke = "lab_smoke.researcher:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = [
@@ -28,6 +31,7 @@ include = [
   "providers*",
   "prompts*",
   "schemas*",
+  "lab_smoke*",
 ]
 
 [tool.setuptools.package-data]
