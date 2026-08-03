@@ -6,11 +6,16 @@
 
 ## Status
 
-**Bootstrap / Mock MVP**
+**Bootstrap / OpenAI Adapter MVP**
 
-Researcher、Skeptic、Synthesizerを順次実行し、各出力を構造・意味の両面で検証する最小ルートが、Mock Provider環境で動作する段階です。外部AI APIはまだ接続していません。
+Researcher、Skeptic、Synthesizerを順次実行し、各出力を構造・意味の両面で検証する最小ルートが実装されています。
 
-正式なMission・Vision・AI憲法は、実モデルを使ったMVP評価後にAI研究室OS自身を用いて再検討します。
+- Mock Providerによる資格情報不要の実行経路
+- OpenAI Responses API Provider
+- OpenAI通信を完全に模擬したProvider・Orchestratorテスト
+- 各段階でのFail-closed検証
+
+OpenAI Providerの実API呼び出しは、まだプロジェクトとして検証していません。正式なMission・Vision・AI憲法は、実モデルを使ったMVP評価後にAI研究室OS自身を用いて再検討します。
 
 ## Initial Scope
 
@@ -104,13 +109,43 @@ print(result.run_id)
 print(result.final_answer)
 ```
 
+## OpenAI Provider
+
+OpenAI SDKは任意依存です。Mock開発や通常のCIではインストールされません。
+
+```bash
+python -m pip install -e ".[dev,openai]"
+```
+
+モデルをコード内で固定せず、APIキーとモデル名を環境変数から読み込みます。
+
+PowerShell：
+
+```powershell
+$env:OPENAI_API_KEY="your-api-key"
+$env:OPENAI_MODEL="your-selected-model"
+python examples/run_openai.py "AI研究室OSは何のために存在するべきか。"
+```
+
+macOS/Linux：
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_MODEL="your-selected-model"
+python examples/run_openai.py "AI研究室OSは何のために存在するべきか。"
+```
+
+この例はResearcher、Skeptic、Synthesizerのために**3回のAPI呼び出し**を行い、利用料金が発生する可能性があります。
+
+OpenAI側にはJSONオブジェクトを要求し、完全なDraft 2020-12スキーマ検証、Claim/Evidence参照整合性、秘密情報検査はローカルValidatorで実行します。モデルは役割固有の`output`だけを生成し、Run ID、時刻、Provider情報は信頼境界の内側で付与します。
+
 ## Tests
 
 ```bash
 python -m pytest
 ```
 
-テストは、正常完走、各段階の検証、不正出力の遮断、呼び出し上限、秘密情報検出、Claim/Evidence参照整合性などを対象とします。
+テストは、正常完走、各段階の検証、不正出力の遮断、呼び出し上限、秘密情報検出、Claim/Evidence参照整合性、OpenAI Responses APIの送信形式、異常応答、OpenAI Providerを使った3段階Mock統合などを対象とします。
 
 ## Continuous Integration
 
@@ -137,14 +172,17 @@ ai-research-lab-os/
 │   └── 04_Evaluation/
 ├── src/
 │   ├── orchestrator/
+│   ├── prompts/
 │   ├── providers/
 │   ├── schemas/
 │   └── validation/
 ├── tests/
+│   ├── test_openai_provider.py
 │   ├── test_orchestrator.py
 │   └── test_validation.py
 └── examples/
-    └── run_mock.py
+    ├── run_mock.py
+    └── run_openai.py
 ```
 
 ## Non-goals at Bootstrap Stage
