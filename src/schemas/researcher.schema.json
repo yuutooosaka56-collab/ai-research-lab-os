@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-research-lab-os.local/schemas/researcher.schema.json",
+  "title": "Researcher Agent Run Output",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/runEnvelopeBase"},
+    {
+      "properties": {
+        "agent": {"const": "researcher"},
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "question_restated",
+            "scope",
+            "subquestions",
+            "assumptions",
+            "claims",
+            "evidence",
+            "conflicts",
+            "unknowns",
+            "research_summary"
+          ],
+          "properties": {
+            "question_restated": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+            "scope": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["included", "excluded"],
+              "properties": {
+                "included": {"$ref": "common.schema.json#/$defs/stringArray"},
+                "excluded": {"$ref": "common.schema.json#/$defs/stringArray"}
+              }
+            },
+            "subquestions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "question", "importance", "reason"],
+                "properties": {
+                  "id": {"$ref": "common.schema.json#/$defs/questionId"},
+                  "question": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "importance": {"$ref": "common.schema.json#/$defs/importance"},
+                  "reason": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+                }
+              }
+            },
+            "assumptions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "text", "risk_if_false"],
+                "properties": {
+                  "id": {"$ref": "common.schema.json#/$defs/assumptionId"},
+                  "text": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "risk_if_false": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+                }
+              }
+            },
+            "claims": {
+              "type": "array",
+              "items": {"$ref": "common.schema.json#/$defs/claim"}
+            },
+            "evidence": {
+              "type": "array",
+              "items": {"$ref": "common.schema.json#/$defs/evidence"}
+            },
+            "conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["description", "claim_ids", "possible_explanations"],
+                "properties": {
+                  "description": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "claim_ids": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {"$ref": "common.schema.json#/$defs/claimId"},
+                    "uniqueItems": true
+                  },
+                  "possible_explanations": {"$ref": "common.schema.json#/$defs/stringArray"}
+                }
+              }
+            },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["question", "importance", "how_to_resolve"],
+                "properties": {
+                  "question": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "importance": {"$ref": "common.schema.json#/$defs/importance"},
+                  "how_to_resolve": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+                }
+              }
+            },
+            "research_summary": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+          }
+        }
+      }
+    }
+  ]
+}
