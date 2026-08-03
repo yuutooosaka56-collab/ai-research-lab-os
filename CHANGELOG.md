@@ -13,3 +13,5 @@
 - Risks and Constraints
 - ADR-0001: Development Model
 - ADR Template
+- Evaluation Rubric
+- MVP Architecture
