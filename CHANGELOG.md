@@ -20,3 +20,7 @@
 - Researcher output schema
 - Skeptic output schema
 - Synthesizer output schema
+- Draft 2020-12 schema validation engine
+- Claim/Evidence and cross-agent semantic validation
+- Confidence-label, timing, duplicate-ID, and secret detection checks
+- Python project configuration and validation tests
