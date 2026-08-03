@@ -39,6 +39,11 @@
 - Optional OpenAI SDK dependency and explicit environment configuration
 - Mocked OpenAI request, response, error, and three-stage integration tests
 - Runnable OpenAI Provider example with explicit cost warning
+- Guarded one-call Researcher smoke-test API and CLI
+- Zero-cost dry-run preview requiring explicit `--execute` for API access
+- Configurable smoke-test output-token and timeout limits
+- Smoke-test validation reporting, exit codes, and optional JSON output
+- Tests proving dry-run makes no request and paid mode calls only Researcher once
 
 ### Fixed
 
