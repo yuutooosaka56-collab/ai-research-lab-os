@@ -6,13 +6,15 @@
 
 ## Status
 
-**Bootstrap / Pre-MVP**
+**Bootstrap / Mock MVP**
 
-本リポジトリは、AI研究室OSの最小実験版を設計する初期段階です。正式なMission・Vision・AI憲法は、MVP完成後にAI研究室OS自身を用いて再検討します。
+Researcher、Skeptic、Synthesizerを順次実行し、各出力を構造・意味の両面で検証する最小ルートが、Mock Provider環境で動作する段階です。外部AI APIはまだ接続していません。
+
+正式なMission・Vision・AI憲法は、実モデルを使ったMVP評価後にAI研究室OS自身を用いて再検討します。
 
 ## Initial Scope
 
-最初のMVPでは、以下の3役のみを実装候補とします。
+最初のMVPでは、以下の3役のみを扱います。
 
 1. **Researcher** — 問いの分解、論点・情報・根拠候補の収集
 2. **Skeptic** — 反証、根拠不足、論理的欠陥、代替仮説の検出
@@ -21,14 +23,18 @@
 ```text
 User Question
     ↓
-Researcher
+Orchestrator
     ↓
-Skeptic
+Researcher → validation
     ↓
-Synthesizer
+Skeptic → validation
+    ↓
+Synthesizer → validation
     ↓
 Evidence-aware Answer
 ```
+
+不正な出力は次のエージェントへ渡さず、その時点で処理を停止します。
 
 ## Documents
 
@@ -72,19 +78,43 @@ if not report.valid:
     print(report.semantic.issues if report.semantic else [])
 ```
 
-### Development setup
+## Mock MVP Run
+
+`MockProvider`は外部APIやAPIキーを使用せず、3役の有効な模擬出力を返します。これは処理構造と検証経路の試験用であり、AI研究品質の実証ではありません。
 
 ```bash
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 python -m pip install -e ".[dev]"
+python examples/run_mock.py
+```
+
+Pythonから直接実行する場合：
+
+```python
+from orchestrator import Orchestrator
+from providers import MockProvider
+
+result = Orchestrator(MockProvider()).run(
+    "AI研究室OSは何のために存在するべきか。"
+)
+
+print(result.run_id)
+print(result.final_answer)
+```
+
+## Tests
+
+```bash
 python -m pytest
 ```
 
+テストは、正常完走、各段階の検証、不正出力の遮断、呼び出し上限、秘密情報検出、Claim/Evidence参照整合性などを対象とします。
+
 ## Continuous Integration
 
-GitHub Actions runs the validation test suite on pushes and pull requests targeting `main`. The workflow checks the minimum supported Python version and a newer Python release, compiles the source tree, and runs `pytest`.
+GitHub Actions runs the test suite on pushes and pull requests targeting `main`. The workflow checks Python 3.11 and 3.14, compiles the source tree, and runs `pytest`.
 
 Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 
@@ -106,10 +136,15 @@ ai-research-lab-os/
 │   ├── 03_Protocols/
 │   └── 04_Evaluation/
 ├── src/
+│   ├── orchestrator/
+│   ├── providers/
 │   ├── schemas/
 │   └── validation/
 ├── tests/
+│   ├── test_orchestrator.py
+│   └── test_validation.py
 └── examples/
+    └── run_mock.py
 ```
 
 ## Non-goals at Bootstrap Stage
