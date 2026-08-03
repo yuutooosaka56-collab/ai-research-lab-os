@@ -47,12 +47,46 @@ Evidence-aware Answer
 
 The schemas use JSON Schema Draft 2020-12 and are intended for Orchestrator-side validation before outputs are accepted or passed to the next agent.
 
+## Validation Engine
+
+`src/validation` provides two validation layers.
+
+1. **Schema validation** — JSON parsing, required fields, types, formats, allowed values, confidence ranges
+2. **Semantic validation** — Claim/Evidence reference integrity, cross-agent references, confidence labels, execution timing, duplicate IDs, potential secret detection
+
+Schema validation is always executed first. Semantic validation runs only when the payload is structurally safe to inspect.
+
+```python
+from validation import validate_agent_output
+
+report = validate_agent_output(
+    synthesizer_payload,
+    researcher_payload=researcher_payload,
+    skeptic_payload=skeptic_payload,
+)
+
+if not report.valid:
+    print(report.schema.issues)
+    print(report.semantic.issues if report.semantic else [])
+```
+
+### Development setup
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+python -m pip install -e ".[dev]"
+pytest
+```
+
 ## Repository Structure
 
 ```text
 ai-research-lab-os/
 ├── README.md
 ├── CHANGELOG.md
+├── pyproject.toml
 ├── .gitignore
 ├── docs/
 │   ├── 00_Project/
@@ -61,7 +95,8 @@ ai-research-lab-os/
 │   ├── 03_Protocols/
 │   └── 04_Evaluation/
 ├── src/
-│   └── schemas/
+│   ├── schemas/
+│   └── validation/
 ├── tests/
 └── examples/
 ```
