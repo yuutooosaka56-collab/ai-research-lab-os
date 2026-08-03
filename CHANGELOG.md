@@ -34,3 +34,12 @@
 - Orchestrator tests for completion, invalid output, call limits, and empty input
 - Runnable Mock MVP example
 - Packaged JSON Schema resources for non-editable installations
+- Provider-neutral Researcher, Skeptic, and Synthesizer prompt contracts
+- OpenAI Responses API Provider with locally trusted run envelopes
+- Optional OpenAI SDK dependency and explicit environment configuration
+- Mocked OpenAI request, response, error, and three-stage integration tests
+- Runnable OpenAI Provider example with explicit cost warning
+
+### Fixed
+
+- Removed a circular import between the prompt router and provider package
