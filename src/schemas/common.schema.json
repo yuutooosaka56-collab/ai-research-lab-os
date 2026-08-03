@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-research-lab-os.local/schemas/common.schema.json",
+  "title": "AI Research Lab OS Common Types",
+  "description": "Shared definitions for MVP agent outputs.",
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringArray": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "uniqueItems": true
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "confidenceLabel": {
+      "type": "string",
+      "enum": ["very_low", "low", "medium", "high", "very_high"]
+    },
+    "claimId": {"type": "string", "pattern": "^C-[0-9]{3,}$"},
+    "evidenceId": {"type": "string", "pattern": "^E-[0-9]{3,}$"},
+    "questionId": {"type": "string", "pattern": "^Q-[0-9]{3,}$"},
+    "assumptionId": {"type": "string", "pattern": "^A-[0-9]{3,}$"},
+    "issueId": {"type": "string", "pattern": "^I-[0-9]{3,}$"},
+    "counterargumentId": {"type": "string", "pattern": "^CA-[0-9]{3,}$"},
+    "hypothesisId": {"type": "string", "pattern": "^H-[0-9]{3,}$"},
+    "runId": {"type": "string", "pattern": "^RUN-[A-Za-z0-9._:-]+$"},
+    "sourceType": {
+      "type": "string",
+      "enum": ["primary", "secondary", "tertiary", "user_supplied", "model_memory", "unknown"]
+    },
+    "verificationStatus": {
+      "type": "string",
+      "enum": ["supported", "partially_supported", "contradicted", "unverified", "not_applicable"]
+    },
+    "claimType": {
+      "type": "string",
+      "enum": ["fact", "inference", "hypothesis", "proposal", "unknown"]
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "major", "moderate", "minor", "none"]
+    },
+    "importance": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"]
+    },
+    "argumentStrength": {
+      "type": "string",
+      "enum": ["strong", "moderate", "weak"]
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "name", "version"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/nonEmptyString"},
+        "name": {"$ref": "#/$defs/nonEmptyString"},
+        "version": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "title",
+        "source_type",
+        "locator",
+        "supports_claim_ids",
+        "reliability",
+        "notes"
+      ],
+      "properties": {
+        "evidence_id": {"$ref": "#/$defs/evidenceId"},
+        "title": {"$ref": "#/$defs/nonEmptyString"},
+        "source_type": {"$ref": "#/$defs/sourceType"},
+        "locator": {"$ref": "#/$defs/nonEmptyString"},
+        "published_at": {"type": ["string", "null"], "format": "date"},
+        "retrieved_at": {"type": ["string", "null"], "format": "date-time"},
+        "supports_claim_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/claimId"},
+          "uniqueItems": true
+        },
+        "reliability": {"$ref": "#/$defs/confidence"},
+        "notes": {"type": "string"}
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_id",
+        "text",
+        "type",
+        "confidence",
+        "evidence_ids",
+        "assumptions",
+        "limitations",
+        "verification_status"
+      ],
+      "properties": {
+        "claim_id": {"$ref": "#/$defs/claimId"},
+        "text": {"$ref": "#/$defs/nonEmptyString"},
+        "type": {"$ref": "#/$defs/claimType"},
+        "confidence": {"$ref": "#/$defs/confidence"},
+        "evidence_ids": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidenceId"},
+          "uniqueItems": true
+        },
+        "assumptions": {"$ref": "#/$defs/stringArray"},
+        "limitations": {"$ref": "#/$defs/stringArray"},
+        "verification_status": {"$ref": "#/$defs/verificationStatus"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"type": {"const": "fact"}},
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "evidence_ids": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    },
+    "runEnvelopeBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "run_id",
+        "agent",
+        "status",
+        "started_at",
+        "completed_at",
+        "model",
+        "input_digest",
+        "warnings",
+        "errors",
+        "output"
+      ],
+      "properties": {
+        "protocol_version": {"const": "0.1"},
+        "run_id": {"$ref": "#/$defs/runId"},
+        "agent": {
+          "type": "string",
+          "enum": ["researcher", "skeptic", "synthesizer"]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "completed",
+            "completed_with_warnings",
+            "partial",
+            "failed",
+            "cancelled",
+            "budget_exceeded",
+            "timeout"
+          ]
+        },
+        "started_at": {"type": "string", "format": "date-time"},
+        "completed_at": {"type": ["string", "null"], "format": "date-time"},
+        "model": {"$ref": "#/$defs/model"},
+        "input_digest": {"$ref": "#/$defs/nonEmptyString"},
+        "warnings": {"$ref": "#/$defs/stringArray"},
+        "errors": {"$ref": "#/$defs/stringArray"},
+        "output": {"type": "object"}
+      }
+    }
+  }
+}
