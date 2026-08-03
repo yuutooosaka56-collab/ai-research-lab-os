@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-research-lab-os.local/schemas/synthesizer.schema.json",
+  "title": "Synthesizer Agent Run Output",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/runEnvelopeBase"},
+    {
+      "properties": {
+        "agent": {"const": "synthesizer"},
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "direct_answer",
+            "conclusion",
+            "supported_findings",
+            "important_counterpoints",
+            "unresolved_uncertainties",
+            "assumptions",
+            "recommended_actions",
+            "citations",
+            "plain_language_answer"
+          ],
+          "properties": {
+            "direct_answer": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+            "conclusion": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["text", "confidence", "confidence_label", "conditions"],
+              "properties": {
+                "text": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                "confidence": {"$ref": "common.schema.json#/$defs/confidence"},
+                "confidence_label": {"$ref": "common.schema.json#/$defs/confidenceLabel"},
+                "conditions": {"$ref": "common.schema.json#/$defs/stringArray"}
+              }
+            },
+            "supported_findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["claim_id", "text", "evidence_ids", "confidence"],
+                "properties": {
+                  "claim_id": {"$ref": "common.schema.json#/$defs/claimId"},
+                  "text": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "evidence_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"$ref": "common.schema.json#/$defs/evidenceId"},
+                    "uniqueItems": true
+                  },
+                  "confidence": {"$ref": "common.schema.json#/$defs/confidence"}
+                }
+              }
+            },
+            "important_counterpoints": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["issue_id", "text", "impact_on_conclusion"],
+                "properties": {
+                  "issue_id": {"$ref": "common.schema.json#/$defs/issueId"},
+                  "text": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "impact_on_conclusion": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+                }
+              }
+            },
+            "unresolved_uncertainties": {"$ref": "common.schema.json#/$defs/stringArray"},
+            "assumptions": {"$ref": "common.schema.json#/$defs/stringArray"},
+            "recommended_actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["priority", "action", "purpose", "success_signal"],
+                "properties": {
+                  "priority": {"type": "integer", "minimum": 1},
+                  "action": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "purpose": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "success_signal": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+                }
+              }
+            },
+            "citations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["evidence_id", "locator"],
+                "properties": {
+                  "evidence_id": {"$ref": "common.schema.json#/$defs/evidenceId"},
+                  "locator": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+                }
+              }
+            },
+            "plain_language_answer": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+          }
+        }
+      }
+    }
+  ]
+}
