@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-research-lab-os.local/schemas/skeptic.schema.json",
+  "title": "Skeptic Agent Run Output",
+  "allOf": [
+    {"$ref": "common.schema.json#/$defs/runEnvelopeBase"},
+    {
+      "properties": {
+        "agent": {"const": "skeptic"},
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "overall_assessment",
+            "issues",
+            "counterarguments",
+            "alternative_hypotheses",
+            "confidence_adjustments",
+            "additional_research_required",
+            "priority_followups",
+            "surviving_strengths"
+          ],
+          "properties": {
+            "overall_assessment": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "issue_id",
+                  "severity",
+                  "category",
+                  "target_claim_ids",
+                  "description",
+                  "why_it_matters",
+                  "recommended_correction"
+                ],
+                "properties": {
+                  "issue_id": {"$ref": "common.schema.json#/$defs/issueId"},
+                  "severity": {"$ref": "common.schema.json#/$defs/severity"},
+                  "category": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "target_claim_ids": {
+                    "type": "array",
+                    "items": {"$ref": "common.schema.json#/$defs/claimId"},
+                    "uniqueItems": true
+                  },
+                  "description": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "why_it_matters": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "recommended_correction": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+                }
+              }
+            },
+            "counterarguments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "argument", "strength", "supporting_evidence_ids"],
+                "properties": {
+                  "id": {"$ref": "common.schema.json#/$defs/counterargumentId"},
+                  "argument": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "strength": {"$ref": "common.schema.json#/$defs/argumentStrength"},
+                  "supporting_evidence_ids": {
+                    "type": "array",
+                    "items": {"$ref": "common.schema.json#/$defs/evidenceId"},
+                    "uniqueItems": true
+                  }
+                }
+              }
+            },
+            "alternative_hypotheses": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "hypothesis", "what_would_support_it", "what_would_falsify_it"],
+                "properties": {
+                  "id": {"$ref": "common.schema.json#/$defs/hypothesisId"},
+                  "hypothesis": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "what_would_support_it": {"$ref": "common.schema.json#/$defs/nonEmptyString"},
+                  "what_would_falsify_it": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+                }
+              }
+            },
+            "confidence_adjustments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["claim_id", "original", "recommended", "reason"],
+                "properties": {
+                  "claim_id": {"$ref": "common.schema.json#/$defs/claimId"},
+                  "original": {"$ref": "common.schema.json#/$defs/confidence"},
+                  "recommended": {"$ref": "common.schema.json#/$defs/confidence"},
+                  "reason": {"$ref": "common.schema.json#/$defs/nonEmptyString"}
+                }
+              }
+            },
+            "additional_research_required": {"type": "boolean"},
+            "priority_followups": {"$ref": "common.schema.json#/$defs/stringArray"},
+            "surviving_strengths": {"$ref": "common.schema.json#/$defs/stringArray"}
+          }
+        }
+      }
+    }
+  ]
+}
