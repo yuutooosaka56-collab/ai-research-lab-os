@@ -16,10 +16,19 @@ dependencies = [
 dev = [
   "pytest>=8,<9",
 ]
+openai = [
+  "openai>=2.46,<3",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["validation*", "orchestrator*", "providers*", "schemas*"]
+include = [
+  "validation*",
+  "orchestrator*",
+  "providers*",
+  "prompts*",
+  "schemas*",
+]
 
 [tool.setuptools.package-data]
 schemas = ["*.json"]
