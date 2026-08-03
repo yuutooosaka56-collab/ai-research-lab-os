@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
-
-from providers.base import AgentName
+from typing import Any, Literal, Mapping
 
 from .common import PromptBundle
 from .researcher import build_researcher_prompt
 from .skeptic import build_skeptic_prompt
 from .synthesizer import build_synthesizer_prompt
+
+AgentName = Literal["researcher", "skeptic", "synthesizer"]
 
 
 def build_agent_prompt(
@@ -28,6 +28,7 @@ def build_agent_prompt(
 
 
 __all__ = [
+    "AgentName",
     "PromptBundle",
     "build_agent_prompt",
     "build_researcher_prompt",
