@@ -35,6 +35,7 @@ Evidence-aware Answer
 - [ADR-0001: Development Model](docs/01_ADR/ADR-0001-Development-Model.md)
 - [ADR Template](docs/01_ADR/ADR-Template.md)
 - [MVP Architecture](docs/02_Architecture/MVPArchitecture.md)
+- [Agent Protocol](docs/03_Protocols/AgentProtocol.md)
 - [Evaluation Rubric](docs/04_Evaluation/EvaluationRubric.md)
 
 ## Repository Structure
