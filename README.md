@@ -1,5 +1,7 @@
 # AI Research Lab OS
 
+[![CI](https://github.com/yuutooosaka56-collab/ai-research-lab-os/actions/workflows/ci.yml/badge.svg)](https://github.com/yuutooosaka56-collab/ai-research-lab-os/actions/workflows/ci.yml)
+
 > 複雑な問いに対して、複数のAIが調査・反証・統合を行い、単体AIより高品質で検証可能な回答を生成できるかを研究・実装するプロジェクト。
 
 ## Status
@@ -77,13 +79,22 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 python -m pip install -e ".[dev]"
-pytest
+python -m pytest
 ```
+
+## Continuous Integration
+
+GitHub Actions runs the validation test suite on pushes and pull requests targeting `main`. The workflow checks the minimum supported Python version and a newer Python release, compiles the source tree, and runs `pytest`.
+
+Workflow: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 
 ## Repository Structure
 
 ```text
 ai-research-lab-os/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── README.md
 ├── CHANGELOG.md
 ├── pyproject.toml
