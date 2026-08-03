@@ -12,6 +12,7 @@ Researcher、Skeptic、Synthesizerを順次実行し、各出力を構造・意�
 
 - Mock Providerによる資格情報不要の実行経路
 - OpenAI Responses API Provider
+- 料金ゼロのプレビューを既定とする1回限定Researcherスモークテスト
 - OpenAI通信を完全に模擬したProvider・Orchestratorテスト
 - 各段階でのFail-closed検証
 
@@ -109,7 +110,7 @@ print(result.run_id)
 print(result.final_answer)
 ```
 
-## OpenAI Provider
+## OpenAI Provider Setup
 
 OpenAI SDKは任意依存です。Mock開発や通常のCIではインストールされません。
 
@@ -124,7 +125,6 @@ PowerShell：
 ```powershell
 $env:OPENAI_API_KEY="your-api-key"
 $env:OPENAI_MODEL="your-selected-model"
-python examples/run_openai.py "AI研究室OSは何のために存在するべきか。"
 ```
 
 macOS/Linux：
@@ -132,10 +132,65 @@ macOS/Linux：
 ```bash
 export OPENAI_API_KEY="your-api-key"
 export OPENAI_MODEL="your-selected-model"
+```
+
+## One-call OpenAI Smoke Test
+
+最初の実API確認では、3役を動かさずResearcherだけを1回呼びます。既定動作はプレビューであり、API通信も料金発生もありません。
+
+```bash
+ai-research-smoke "AI研究室OSのResearcher接続を確認してください。"
+```
+
+プレビューには、選択モデル、呼び出し数、最大出力トークン、質問が表示されます。APIキー自体は表示しません。
+
+実際に1回だけ送信する場合は、`--execute`を明示します。
+
+```bash
+ai-research-smoke \
+  --execute \
+  --max-output-tokens 1200 \
+  "AI研究室OSのResearcher接続を確認してください。"
+```
+
+Windowsで複数行にしない場合：
+
+```powershell
+ai-research-smoke --execute --max-output-tokens 1200 "AI研究室OSのResearcher接続を確認してください。"
+```
+
+同じ機能は次でも実行できます。
+
+```bash
+python examples/run_openai_smoke.py
+python examples/run_openai_smoke.py --execute
+```
+
+このコマンドの呼び出し数は次に固定されています。
+
+- Researcher: 1回
+- Skeptic: 0回
+- Synthesizer: 0回
+
+返却されたRun Envelopeは、通常のSchema検証とSemantic検証を通します。成功時は終了コード0、API・設定エラーは1、入力または検証エラーは2です。完全な検証済みJSONを確認する場合は`--show-json`を追加します。
+
+## Full OpenAI MVP Run
+
+3役を一周させる実行例：
+
+PowerShell：
+
+```powershell
 python examples/run_openai.py "AI研究室OSは何のために存在するべきか。"
 ```
 
-この例はResearcher、Skeptic、Synthesizerのために**3回のAPI呼び出し**を行い、利用料金が発生する可能性があります。
+macOS/Linux：
+
+```bash
+python examples/run_openai.py "AI研究室OSは何のために存在するべきか。"
+```
+
+この例はResearcher、Skeptic、Synthesizerのために**3回のAPI呼び出し**を行い、利用料金が発生する可能性があります。最初の接続確認には、先に1回限定スモークテストを使用してください。
 
 OpenAI側にはJSONオブジェクトを要求し、完全なDraft 2020-12スキーマ検証、Claim/Evidence参照整合性、秘密情報検査はローカルValidatorで実行します。モデルは役割固有の`output`だけを生成し、Run ID、時刻、Provider情報は信頼境界の内側で付与します。
 
@@ -145,7 +200,7 @@ OpenAI側にはJSONオブジェクトを要求し、完全なDraft 2020-12スキ
 python -m pytest
 ```
 
-テストは、正常完走、各段階の検証、不正出力の遮断、呼び出し上限、秘密情報検出、Claim/Evidence参照整合性、OpenAI Responses APIの送信形式、異常応答、OpenAI Providerを使った3段階Mock統合などを対象とします。
+テストは、正常完走、各段階の検証、不正出力の遮断、呼び出し上限、秘密情報検出、Claim/Evidence参照整合性、OpenAI Responses APIの送信形式、異常応答、OpenAI Providerを使った3段階Mock統合、スモークテストの料金ゼロプレビュー、1回限定呼び出しなどを対象とします。
 
 ## Continuous Integration
 
@@ -171,6 +226,7 @@ ai-research-lab-os/
 │   ├── 03_Protocols/
 │   └── 04_Evaluation/
 ├── src/
+│   ├── lab_smoke/
 │   ├── orchestrator/
 │   ├── prompts/
 │   ├── providers/
@@ -179,10 +235,12 @@ ai-research-lab-os/
 ├── tests/
 │   ├── test_openai_provider.py
 │   ├── test_orchestrator.py
+│   ├── test_researcher_smoke.py
 │   └── test_validation.py
 └── examples/
     ├── run_mock.py
-    └── run_openai.py
+    ├── run_openai.py
+    └── run_openai_smoke.py
 ```
 
 ## Non-goals at Bootstrap Stage
