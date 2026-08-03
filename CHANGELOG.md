@@ -26,3 +26,11 @@
 - Python project configuration and validation tests
 - GitHub Actions CI workflow for Python 3.11 and 3.14
 - CI badge and local test instructions in README
+- Provider abstraction for model-independent agent execution
+- Deterministic Mock Provider for credential-free runs
+- Bounded sequential Orchestrator for Researcher, Skeptic, and Synthesizer
+- Fail-closed validation between every agent stage
+- Run ID, provider call limit, and lightweight audit event tracking
+- Orchestrator tests for completion, invalid output, call limits, and empty input
+- Runnable Mock MVP example
+- Packaged JSON Schema resources for non-editable installations
