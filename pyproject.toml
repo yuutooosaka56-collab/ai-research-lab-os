@@ -19,7 +19,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["validation*"]
+include = ["validation*", "orchestrator*", "providers*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
