@@ -126,8 +126,11 @@ class OpenAIProvider:
 
         status = getattr(response, "status", None)
         if status != "completed":
+            reason = _incomplete_reason(response)
+            reason_text = f", reason was {reason!r}" if reason else ""
             raise OpenAIProviderResponseError(
-                f"OpenAI response status was {status!r}, expected 'completed'"
+                f"OpenAI response status was {status!r}{reason_text}, "
+                "expected 'completed'"
             )
 
         output_text = getattr(response, "output_text", None)
@@ -189,6 +192,12 @@ class OpenAIProvider:
         if api_key is not None:
             kwargs["api_key"] = api_key
         return OpenAI(**kwargs)
+
+
+def _incomplete_reason(response: Any) -> str | None:
+    details = getattr(response, "incomplete_details", None)
+    reason = getattr(details, "reason", None)
+    return reason if isinstance(reason, str) and reason else None
 
 
 def _digest(request: Mapping[str, Any]) -> str:
