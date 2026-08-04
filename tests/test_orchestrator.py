@@ -5,6 +5,7 @@ from typing import Any, Mapping
 import pytest
 
 from orchestrator import (
+    AgentExecutionError,
     AgentValidationError,
     CallBudgetExceeded,
     Orchestrator,
@@ -82,3 +83,79 @@ def test_empty_question_is_rejected_without_provider_call() -> None:
         Orchestrator(provider).run("   ")
 
     assert provider.calls == []
+
+
+class ForgedRunIdProvider(MockProvider):
+    """Return a run identifier the orchestrator never issued."""
+
+    def run_agent(
+        self,
+        agent: AgentName,
+        request: Mapping[str, Any],
+        *,
+        run_id: str,
+    ) -> Mapping[str, Any]:
+        payload = dict(
+            super().run_agent(agent, request, run_id=run_id)
+        )
+        payload["run_id"] = "RUN-FORGED-0000"
+        return payload
+
+
+def test_forged_run_id_stops_before_schema_validation() -> None:
+    provider = ForgedRunIdProvider()
+
+    with pytest.raises(AgentExecutionError, match="run_id"):
+        Orchestrator(provider).run("run_id偽装の停止試験")
+
+    assert provider.calls == ["researcher"]
+
+
+class SwappedAgentProvider(MockProvider):
+    """Answer a researcher request with a valid skeptic envelope."""
+
+    def run_agent(
+        self,
+        agent: AgentName,
+        request: Mapping[str, Any],
+        *,
+        run_id: str,
+    ) -> Mapping[str, Any]:
+        if agent == "researcher":
+            self.calls.append(agent)
+            researcher = MockProvider().run_agent(
+                "researcher",
+                request,
+                run_id=run_id,
+            )
+            return MockProvider().run_agent(
+                "skeptic",
+                {
+                    "original_question": "swap",
+                    "researcher_payload": researcher,
+                },
+                run_id=run_id,
+            )
+        return super().run_agent(agent, request, run_id=run_id)
+
+
+def test_swapped_agent_payload_stops_before_schema_validation() -> None:
+    provider = SwappedAgentProvider()
+
+    with pytest.raises(AgentExecutionError) as exc_info:
+        Orchestrator(provider).run("agent入れ替えの停止試験")
+
+    assert exc_info.value.agent == "researcher"
+    assert "expected 'researcher'" in str(exc_info.value)
+    assert provider.calls == ["researcher"]
+
+
+def test_result_exposes_audit_events() -> None:
+    result = Orchestrator(MockProvider()).run("監査イベントの保存試験")
+
+    names = [event["event"] for event in result.events]
+
+    assert names.count("provider_call_reserved") == 3
+    assert names.count("agent_completed") == 3
+    assert names[-1] == "run_completed"
+    assert all("at" in event for event in result.events)

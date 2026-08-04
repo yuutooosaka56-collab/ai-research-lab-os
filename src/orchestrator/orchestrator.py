@@ -109,6 +109,7 @@ class Orchestrator:
             started_at=run_context.started_at,
             completed_at=completed_at,
             stages=tuple(stages),
+            events=tuple(run_context.events),
         )
 
     def _execute(
@@ -139,8 +140,11 @@ class Orchestrator:
             )
             raise AgentExecutionError(agent, str(exc)) from exc
 
+        self._verify_envelope_identity(run_context, agent, payload)
+
         report = self._validator(
             payload,
+            agent=agent,
             researcher_payload=researcher_payload,
             skeptic_payload=skeptic_payload,
         )
@@ -165,3 +169,44 @@ class Orchestrator:
             validation=report,
             elapsed_seconds=elapsed,
         )
+
+    @staticmethod
+    def _verify_envelope_identity(
+        run_context: RunContext,
+        agent: AgentName,
+        payload: Mapping[str, Any],
+    ) -> None:
+        """Reject an envelope that does not match the request that produced it.
+
+        The run identifier and the agent name are assigned by the orchestrator,
+        never by the provider or the model. Checking them here keeps a provider
+        from substituting another role's payload or attaching a run identifier
+        this orchestrator never issued. Both checks run before schema
+        validation so a mismatched payload never selects its own contract.
+        """
+
+        returned_run_id = payload.get("run_id")
+        if returned_run_id != run_context.run_id:
+            run_context.record(
+                "agent_identity_rejected",
+                agent=agent,
+                reason="run_id_mismatch",
+            )
+            raise AgentExecutionError(
+                agent,
+                f"provider returned run_id {returned_run_id!r}, "
+                f"expected {run_context.run_id!r}",
+            )
+
+        returned_agent = payload.get("agent")
+        if returned_agent != agent:
+            run_context.record(
+                "agent_identity_rejected",
+                agent=agent,
+                reason="agent_mismatch",
+            )
+            raise AgentExecutionError(
+                agent,
+                f"provider returned agent {returned_agent!r}, "
+                f"expected {agent!r}",
+            )

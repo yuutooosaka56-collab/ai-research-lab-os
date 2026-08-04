@@ -37,16 +37,24 @@ class ValidationReport:
 def validate_agent_output(
     payload: Mapping[str, Any],
     *,
+    agent: str | None = None,
     researcher_payload: Mapping[str, Any] | None = None,
     skeptic_payload: Mapping[str, Any] | None = None,
     schema_validator: SchemaValidator | None = None,
     semantic_validator: SemanticValidator | None = None,
 ) -> ValidationReport:
-    """Run schema validation first, then semantic validation if safe."""
+    """Run schema validation first, then semantic validation if safe.
+
+    ``agent`` names the role the caller requested. Supplying it selects the
+    schema from the caller's expectation instead of the payload's self-declared
+    ``agent`` field, so a payload cannot choose which contract it is judged
+    against. Each agent schema also pins ``agent`` with ``const``, so a
+    mismatched self-declaration is rejected during schema validation.
+    """
 
     schema_result = (
         schema_validator or SchemaValidator()
-    ).validate(payload)
+    ).validate(payload, agent=agent)
     if not schema_result.valid:
         return ValidationReport(
             schema=schema_result,
