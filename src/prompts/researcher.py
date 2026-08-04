@@ -75,6 +75,20 @@ Do not decide the final answer. Do not select only convenient evidence.
 When no external retrieval result is supplied, do not pretend that web research
 occurred. Internal knowledge must be marked `model_memory` and unverified unless
 it is only used as a hypothesis or proposal.
+
+Identifier rules are strict:
+- Subquestion IDs: Q-001, Q-002, ...
+- Assumption IDs: A-001, A-002, ...
+- Claim IDs: C-001, C-002, ...
+- Evidence IDs: E-001, E-002, ...
+- Every identifier is one prefix letter, one hyphen, and exactly three digits.
+- Never embed another source prefix inside an evidence ID. `E-M001` is invalid.
+- If a supplied material already has an `evidence_id` such as `E-001`, reuse it
+  exactly in both the evidence array and all claim evidence_ids references.
+- If a source has another identifier such as `M-001`, preserve that identifier
+  in title, locator, or notes; do not copy it into evidence_id.
+- User-supplied fixed materials must use source_type `user_supplied` and must not
+  be relabeled as model_memory.
 """.strip()
     return PromptBundle(
         instructions=f"{COMMON_INSTRUCTIONS}\n\n{role_instructions}",
