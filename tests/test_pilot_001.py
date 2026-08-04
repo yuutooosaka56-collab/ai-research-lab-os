@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from experiments.pilot_001_ab_compare import (
     DEFAULT_CASE_PATH,
+    TrackingClient,
     UsageTotals,
     _build_blind_document,
     _load_case,
@@ -31,6 +32,9 @@ def test_pilot_defaults_to_dry_run(capsys) -> None:
     assert exit_code == 0
     assert "DRY RUN: no API request was sent." in captured.out
     assert "Paid model calls: 5 total" in captured.out
+    assert "Reasoning effort: low" in captured.out
+    assert "Max output tokens per call: 8000" in captured.out
+    assert "Execution order: C, A, B" in captured.out
 
 
 def test_usage_totals_collect_response_usage() -> None:
@@ -53,6 +57,31 @@ def test_usage_totals_collect_response_usage() -> None:
     }
 
 
+def test_tracking_client_applies_reasoning_effort() -> None:
+    calls: list[dict[str, object]] = []
+
+    class FakeResponses:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(usage=None)
+
+    inner = SimpleNamespace(responses=FakeResponses())
+    tracked = TrackingClient(
+        inner,
+        UsageTotals(),
+        reasoning_effort="low",
+    )
+
+    tracked.responses.create(model="test-model")
+
+    assert calls == [
+        {
+            "model": "test-model",
+            "reasoning": {"effort": "low"},
+        }
+    ]
+
+
 def test_blind_document_hides_system_names() -> None:
     case = _load_case(DEFAULT_CASE_PATH)
     systems = {
@@ -68,5 +97,6 @@ def test_blind_document_hides_system_names() -> None:
 
     assert "ANSWER X" in document
     assert "answer-c" in document
+    assert "FIXED MATERIALS AND CONSTRAINTS" in document
     assert "A=direct" not in document
     assert "three-agent" not in document
