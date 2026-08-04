@@ -349,12 +349,26 @@ def _build_blind_document(
         "QUESTION",
         case["question"],
         "",
-        "SCORING",
-        "各回答を0～5点で採点：正確性、根拠対応、推論、反証、"
-        "不確実性、網羅性、実行可能性、明瞭さ。",
-        "回答の長さや文体だけで優劣を決めない。",
-        "",
+        "FIXED MATERIALS",
     ]
+    for material in case["materials"]:
+        lines.append(
+            f"{material['material_id']} | {material['name']}"
+        )
+        lines.extend(f"- {fact}" for fact in material["facts"])
+        lines.append("")
+    lines.append("CONSTRAINTS")
+    lines.extend(f"- {constraint}" for constraint in case["constraints"])
+    lines.extend(
+        [
+            "",
+            "SCORING",
+            "各回答を0～5点で採点：正確性、根拠対応、推論、反証、"
+            "不確実性、網羅性、実行可能性、明瞭さ。",
+            "回答の長さや文体だけで優劣を決めない。",
+            "",
+        ]
+    )
     for blind_label in ("X", "Y", "Z"):
         system_key = mapping[blind_label]
         lines.extend(
