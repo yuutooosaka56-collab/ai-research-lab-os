@@ -89,8 +89,10 @@ def run_researcher_smoke(
 
     if payload.get("run_id") != expected_run_id:
         raise SmokeTestError("Provider returned an unexpected run_id")
+    if payload.get("agent") != "researcher":
+        raise SmokeTestError("Provider returned an unexpected agent")
 
-    report = validate_agent_output(payload)
+    report = validate_agent_output(payload, agent="researcher")
     return ResearcherSmokeResult(
         run_id=expected_run_id,
         payload=payload,

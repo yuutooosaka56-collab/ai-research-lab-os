@@ -191,6 +191,34 @@ def test_schema_rejects_fact_without_evidence(
     )
 
 
+def test_self_declared_agent_cannot_choose_its_own_schema(
+    skeptic_payload: dict,
+) -> None:
+    """A skeptic envelope must fail when the caller expected a researcher.
+
+    Without an explicit ``agent`` the validator falls back to the payload's own
+    ``agent`` field, so the payload would select the contract it satisfies.
+    """
+
+    unpinned = validate_agent_output(skeptic_payload)
+    assert unpinned.valid
+
+    pinned = validate_agent_output(skeptic_payload, agent="researcher")
+    assert not pinned.valid
+    assert pinned.semantic is None
+    assert any(
+        issue.validator == "const" and issue.path == "$/agent"
+        for issue in pinned.schema.issues
+    )
+
+
+def test_expected_agent_accepts_the_matching_payload(
+    researcher_payload: dict,
+) -> None:
+    report = validate_agent_output(researcher_payload, agent="researcher")
+    assert report.valid, report.schema.issues
+
+
 def test_semantic_rejects_dangling_evidence(
     researcher_payload: dict,
 ) -> None:

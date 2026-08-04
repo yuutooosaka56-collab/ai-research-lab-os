@@ -13,20 +13,46 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import secrets
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, Mapping
 
 from orchestrator import AgentValidationError, Orchestrator
 from providers import OpenAIProvider
+from validation import ValidationReport
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASE_PATH = ROOT / "experiments" / "pilot_001_case.json"
 DEFAULT_ARTIFACT_DIR = ROOT / "artifacts"
+
+SYSTEM_KEYS = ("A", "B", "C")
+BLIND_LABELS = ("X", "Y", "Z")
+
+# Every system is graded on the same six sections. A and B are instructed to
+# produce them; C is rendered into them from the synthesizer output.
+SCORING_SECTIONS = (
+    "1. 結論",
+    "2. 計算根拠と支持された判断",
+    "3. 反論・主要リスク",
+    "4. 不確実性と前提",
+    "5. 推奨アクション",
+    "6. 根拠参照",
+)
+
+_SHARED_FORMAT_INSTRUCTION = (
+    "回答は次の6つの見出しを、この順序で、この表記のまま使って構成してください。\n"
+    + "\n".join(SCORING_SECTIONS)
+    + "\n「6. 根拠参照」では、使用した固定資料を evidence_id（E-001 など）で参照してください。"
+)
+
+_MISSING = "(記載なし)"
+
+_RUN_ID_PATTERN = re.compile(r"RUN-[A-Za-z0-9._:-]+")
 
 
 @dataclass
@@ -61,10 +87,12 @@ class TrackingResponses:
         usage: UsageTotals,
         *,
         reasoning_effort: str,
+        extra_usage: UsageTotals | None = None,
     ) -> None:
         self._inner = inner
         self._usage = usage
         self._reasoning_effort = reasoning_effort
+        self._extra_usage = extra_usage
 
     def create(self, **kwargs: Any) -> Any:
         kwargs.setdefault(
@@ -73,6 +101,8 @@ class TrackingResponses:
         )
         response = self._inner.create(**kwargs)
         self._usage.add_response(response)
+        if self._extra_usage is not None:
+            self._extra_usage.add_response(response)
         return response
 
 
@@ -83,12 +113,100 @@ class TrackingClient:
         usage: UsageTotals,
         *,
         reasoning_effort: str,
+        extra_usage: UsageTotals | None = None,
     ) -> None:
         self.responses = TrackingResponses(
             inner.responses,
             usage,
             reasoning_effort=reasoning_effort,
+            extra_usage=extra_usage,
         )
+
+
+def build_os_scoring_document(output: Mapping[str, Any]) -> str:
+    """Render one synthesizer output as a complete scoring document.
+
+    Grading system C on ``plain_language_answer`` alone would discard the
+    counterpoints, uncertainties, assumptions, actions, and citations that the
+    rubric actually scores, and would leave C with a visibly different shape
+    from A and B. This renders the synthesizer fields into the same six
+    sections A and B are asked to produce.
+    """
+
+    lines: list[str] = []
+
+    lines.append(SCORING_SECTIONS[0])
+    lines.append(_text(output.get("direct_answer")) or _MISSING)
+    lines.append("")
+
+    lines.append(SCORING_SECTIONS[1])
+    findings = _objects(output.get("supported_findings"))
+    if findings:
+        for item in findings:
+            references = ", ".join(_strings(item.get("evidence_ids")))
+            suffix = f"（根拠: {references}）" if references else ""
+            lines.append(f"- {_text(item.get('text'))}{suffix}")
+    else:
+        lines.append(_MISSING)
+    lines.append("")
+
+    lines.append(SCORING_SECTIONS[2])
+    counterpoints = _objects(output.get("important_counterpoints"))
+    if counterpoints:
+        for item in counterpoints:
+            impact = _text(item.get("impact_on_conclusion"))
+            suffix = f"（結論への影響: {impact}）" if impact else ""
+            lines.append(f"- {_text(item.get('text'))}{suffix}")
+    else:
+        lines.append(_MISSING)
+    lines.append("")
+
+    lines.append(SCORING_SECTIONS[3])
+    uncertainties = _strings(output.get("unresolved_uncertainties"))
+    assumptions = _strings(output.get("assumptions"))
+    if uncertainties or assumptions:
+        for item in uncertainties:
+            lines.append(f"- 不確実性: {item}")
+        for item in assumptions:
+            lines.append(f"- 前提: {item}")
+    else:
+        lines.append(_MISSING)
+    lines.append("")
+
+    lines.append(SCORING_SECTIONS[4])
+    actions = _objects(output.get("recommended_actions"))
+    if actions:
+        ordered = sorted(
+            actions,
+            key=lambda item: (
+                item.get("priority")
+                if isinstance(item.get("priority"), int)
+                else 10**6
+            ),
+        )
+        for item in ordered:
+            priority = item.get("priority")
+            label = f"優先度{priority}" if isinstance(priority, int) else "優先度不明"
+            lines.append(
+                f"- {label}: {_text(item.get('action'))}"
+                f" / 目的: {_text(item.get('purpose'))}"
+                f" / 成功指標: {_text(item.get('success_signal'))}"
+            )
+    else:
+        lines.append(_MISSING)
+    lines.append("")
+
+    lines.append(SCORING_SECTIONS[5])
+    citations = _objects(output.get("citations"))
+    if citations:
+        for item in citations:
+            lines.append(
+                f"- {_text(item.get('evidence_id'))}: {_text(item.get('locator'))}"
+            )
+    else:
+        lines.append(_MISSING)
+
+    return "\n".join(lines).strip()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -182,46 +300,88 @@ def main(argv: list[str] | None = None) -> int:
     )
     shared_input = _shared_input(case)
 
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    args.artifact_dir.mkdir(parents=True, exist_ok=True)
+    partial_path = args.artifact_dir / f"pilot_001_{timestamp}_partial.json"
+    result_path = args.artifact_dir / f"pilot_001_{timestamp}.json"
+    blind_path = args.artifact_dir / f"pilot_001_{timestamp}_blind.txt"
+
+    settings = {
+        "reasoning_effort": args.reasoning_effort,
+        "max_output_tokens": args.max_output_tokens,
+        "timeout_seconds": args.timeout_seconds,
+        "execution_order": ["C", "A", "B"],
+    }
+    systems: dict[str, dict[str, Any]] = {}
+    cumulative_usage = UsageTotals()
+    current_system: str | None = None
+
+    def checkpoint(failure: dict[str, Any] | None = None) -> None:
+        _write_json(
+            partial_path,
+            _checkpoint_record(
+                case=case,
+                model=model,
+                settings=settings,
+                systems=systems,
+                cumulative_usage=cumulative_usage,
+                failure=failure,
+            ),
+        )
+
     try:
+        current_system = "C"
         print("\nRunning C: three-agent OS (3 calls)...")
-        os_result = _run_os_answer(
+        systems["C"] = _run_os_answer(
             client=base_client,
             model=model,
             case=case,
             timeout_seconds=args.timeout_seconds,
             max_output_tokens=args.max_output_tokens,
             reasoning_effort=args.reasoning_effort,
+            cumulative_usage=cumulative_usage,
         )
+        checkpoint()
+
+        current_system = "A"
         print("Running A: direct single model (1 call)...")
-        direct = _run_single_answer(
+        systems["A"] = _run_single_answer(
             client=base_client,
             model=model,
             usage=UsageTotals(),
             reasoning_effort=args.reasoning_effort,
             instructions=(
-                "固定資料だけを使って質問に直接答えてください。"
-                "資料にない事実を追加せず、採用案、却下案、計算根拠、"
-                "主要リスク、追加検証項目を日本語で簡潔に示してください。"
+                "固定資料だけを使って質問に答えてください。"
+                "資料にない事実は追加しないでください。\n"
+                + _SHARED_FORMAT_INSTRUCTION
             ),
             input_text=shared_input,
             max_output_tokens=args.max_output_tokens,
+            cumulative_usage=cumulative_usage,
         )
+        checkpoint()
+
+        current_system = "B"
         print("Running B: structured single model (1 call)...")
-        structured = _run_single_answer(
+        systems["B"] = _run_single_answer(
             client=base_client,
             model=model,
             usage=UsageTotals(),
             reasoning_effort=args.reasoning_effort,
             instructions=(
-                "固定資料だけを使って回答してください。次の順序で検討し、"
-                "最終回答には各項目を明示してください："
+                "固定資料だけを使って回答してください。次の順序で検討してください："
                 "1.制約と数値の抽出、2.各案の計算、3.採用案、4.最も強い反論、"
-                "5.不確実性、6.追加検証。資料にない事実は追加しないでください。"
+                "5.不確実性、6.追加検証。"
+                "資料にない事実は追加しないでください。\n"
+                + _SHARED_FORMAT_INSTRUCTION
             ),
             input_text=shared_input,
             max_output_tokens=args.max_output_tokens,
+            cumulative_usage=cumulative_usage,
         )
+        checkpoint()
     except AgentValidationError as exc:
+        checkpoint(_failure_record(current_system, exc))
         print(f"ERROR: {exc.agent} failed validation", file=sys.stderr)
         for issue in exc.report.schema.issues:
             print(f"SCHEMA {issue.path}: {issue.message}", file=sys.stderr)
@@ -232,50 +392,39 @@ def main(argv: list[str] | None = None) -> int:
                     f"{issue.path}: {issue.message}",
                     file=sys.stderr,
                 )
+        print(f"Partial result saved: {partial_path}", file=sys.stderr)
         return 1
     except Exception as exc:
+        checkpoint(_failure_record(current_system, exc))
         print(
             f"ERROR: experiment failed with {type(exc).__name__}: {exc}",
             file=sys.stderr,
         )
+        print(f"Partial result saved: {partial_path}", file=sys.stderr)
         return 1
 
-    systems = {
-        "A": direct,
-        "B": structured,
-        "C": os_result,
-    }
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    args.artifact_dir.mkdir(parents=True, exist_ok=True)
-    result_path = args.artifact_dir / f"pilot_001_{timestamp}.json"
-    blind_path = args.artifact_dir / f"pilot_001_{timestamp}_blind.txt"
-
-    blind_labels = ["X", "Y", "Z"]
-    system_keys = list(systems)
+    # Only a fully completed run gets a blind mapping and a blind file.
+    system_keys = list(SYSTEM_KEYS)
     secrets.SystemRandom().shuffle(system_keys)
-    blind_mapping = dict(zip(blind_labels, system_keys, strict=True))
+    blind_mapping = dict(zip(BLIND_LABELS, system_keys, strict=True))
 
-    record = {
-        "experiment_id": case["experiment_id"],
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "model": model,
-        "reasoning_effort": args.reasoning_effort,
-        "max_output_tokens": args.max_output_tokens,
-        "case": case,
-        "systems": systems,
-        "blind_mapping": blind_mapping,
-    }
-    result_path.write_text(
-        json.dumps(record, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    record = _checkpoint_record(
+        case=case,
+        model=model,
+        settings=settings,
+        systems=systems,
+        cumulative_usage=cumulative_usage,
     )
+    record["case"] = case
+    record["blind_mapping"] = blind_mapping
+    _write_json(result_path, record)
     blind_path.write_text(
         _build_blind_document(case, systems, blind_mapping),
         encoding="utf-8",
     )
 
     print("\nCOMPLETE")
-    for key in ("A", "B", "C"):
+    for key in SYSTEM_KEYS:
         item = systems[key]
         usage = item["usage"]
         print(
@@ -283,9 +432,17 @@ def main(argv: list[str] | None = None) -> int:
             f"tokens={usage['total_tokens']} "
             f"time={item['wall_clock_seconds']:.2f}s"
         )
+    print(
+        f"Cumulative: calls={cumulative_usage.calls} "
+        f"tokens={cumulative_usage.total_tokens}"
+    )
     print(f"Full result: {result_path}")
+    print(f"Checkpoint: {partial_path}")
     print(f"Blind evaluation file: {blind_path}")
-    print("Do not open the full result before scoring X, Y, and Z.")
+    print(
+        "Do not open the full result or the checkpoint "
+        "before scoring X, Y, and Z."
+    )
     return 0
 
 
@@ -316,11 +473,13 @@ def _run_single_answer(
     instructions: str,
     input_text: str,
     max_output_tokens: int,
+    cumulative_usage: UsageTotals | None = None,
 ) -> dict[str, Any]:
     tracked = TrackingClient(
         client,
         usage,
         reasoning_effort=reasoning_effort,
+        extra_usage=cumulative_usage,
     )
     started = perf_counter()
     response = tracked.responses.create(
@@ -355,12 +514,14 @@ def _run_os_answer(
     timeout_seconds: float,
     max_output_tokens: int,
     reasoning_effort: str,
+    cumulative_usage: UsageTotals | None = None,
 ) -> dict[str, Any]:
     usage = UsageTotals()
     tracked = TrackingClient(
         client,
         usage,
         reasoning_effort=reasoning_effort,
+        extra_usage=cumulative_usage,
     )
     provider = OpenAIProvider(
         model=model,
@@ -376,17 +537,26 @@ def _run_os_answer(
     started = perf_counter()
     result = Orchestrator(provider).run(case["question"], context=context)
     elapsed = perf_counter() - started
+
+    synthesizer_output = result.payload_for("synthesizer").get("output")
+    if not isinstance(synthesizer_output, Mapping):
+        raise RuntimeError("synthesizer payload did not contain an output object")
+
     return {
-        "answer": result.final_answer,
+        "answer": build_os_scoring_document(synthesizer_output),
+        "plain_language_answer": result.final_answer,
         "run_id": result.run_id,
         "stages": [
             {
                 "agent": stage.agent,
+                "payload": stage.payload,
+                "validation": _validation_to_dict(stage.validation),
                 "valid": stage.validation.valid,
                 "elapsed_seconds": stage.elapsed_seconds,
             }
             for stage in result.stages
         ],
+        "events": list(result.events),
         "wall_clock_seconds": elapsed,
         "usage": usage.as_dict(),
     }
@@ -419,12 +589,14 @@ def _build_blind_document(
         "回答の長さや文体だけで優劣を決めない。",
         "",
     ]
-    for blind_label in ("X", "Y", "Z"):
+    for blind_label in BLIND_LABELS:
         system_key = mapping[blind_label]
+        # Only the formatted answer is exposed. Stage payloads, run ids, agent
+        # names, and the system key never reach the scorer.
         lines.extend(
             [
                 f"===== ANSWER {blind_label} =====",
-                systems[system_key]["answer"],
+                _redact_run_ids(_text(systems[system_key].get("answer"))),
                 "",
                 "SCORES:",
                 "正確性 __/5 | 根拠対応 __/5 | 推論 __/5 | 反証 __/5",
@@ -444,6 +616,109 @@ def _incomplete_reason(response: Any) -> str | None:
 
 def _as_int(value: Any) -> int:
     return int(value) if isinstance(value, (int, float)) else 0
+
+
+def _text(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _objects(value: Any) -> list[Mapping[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, Mapping)]
+
+
+def _strings(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _redact_run_ids(text: str) -> str:
+    """Remove run identifiers, which carry no scoring value but reveal system C."""
+
+    return _RUN_ID_PATTERN.sub("[run-id redacted]", text)
+
+
+def _validation_to_dict(report: ValidationReport) -> dict[str, Any]:
+    """Serialize a validation report for the experiment record."""
+
+    return {
+        "valid": report.valid,
+        "schema_valid": report.schema.valid,
+        "schema_issues": [
+            {
+                "path": issue.path,
+                "message": issue.message,
+                "validator": issue.validator,
+            }
+            for issue in report.schema.issues
+        ],
+        "semantic_issues": [
+            {
+                "severity": issue.severity,
+                "code": issue.code,
+                "path": issue.path,
+                "message": issue.message,
+            }
+            for issue in (
+                report.semantic.issues if report.semantic is not None else ()
+            )
+        ],
+    }
+
+
+def _write_json(path: Path, data: Mapping[str, Any]) -> None:
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+
+
+def _checkpoint_record(
+    *,
+    case: dict[str, Any],
+    model: str,
+    settings: dict[str, Any],
+    systems: dict[str, dict[str, Any]],
+    cumulative_usage: UsageTotals,
+    failure: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the record written after each system and on failure.
+
+    A run that dies partway through has still been paid for, so the completed
+    systems, the cumulative token spend, and the failure detail are persisted
+    instead of discarded.
+    """
+
+    return {
+        "experiment_id": case["experiment_id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "model": model,
+        "settings": settings,
+        "completed_systems": [key for key in SYSTEM_KEYS if key in systems],
+        "systems": systems,
+        "cumulative_usage": cumulative_usage.as_dict(),
+        "failure": failure,
+        "complete": failure is None and len(systems) == len(SYSTEM_KEYS),
+    }
+
+
+def _failure_record(
+    system: str | None,
+    exc: BaseException,
+) -> dict[str, Any]:
+    """Describe a failure without copying provider error text into the artifact."""
+
+    record: dict[str, Any] = {
+        "system": system,
+        "exception_type": type(exc).__name__,
+        "agent": getattr(exc, "agent", None),
+        "validation": None,
+    }
+    if isinstance(exc, AgentValidationError):
+        record["validation"] = _validation_to_dict(exc.report)
+    return record
 
 
 if __name__ == "__main__":
