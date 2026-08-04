@@ -19,6 +19,16 @@ def test_pilot_case_contains_reference_checks() -> None:
 
     assert case["experiment_id"] == "pilot-001"
     assert len(case["materials"]) == 3
+    assert [item["evidence_id"] for item in case["materials"]] == [
+        "E-001",
+        "E-002",
+        "E-003",
+    ]
+    assert [item["locator"] for item in case["materials"]] == [
+        "input://pilot-001/E-001",
+        "input://pilot-001/E-002",
+        "input://pilot-001/E-003",
+    ]
     assert any(
         "クラウドLLM＋人間確認だけ" in check
         for check in case["reference_checks"]
