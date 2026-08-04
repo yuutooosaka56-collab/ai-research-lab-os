@@ -4,7 +4,8 @@
   "question": "以下の固定資料だけを根拠として、500件/日のメッセージ返信業務に採用すべき構成を決定してください。採用案、却下案、計算根拠、主要リスク、追加検証項目を明示してください。資料にない事実は補わないでください。",
   "materials": [
     {
-      "material_id": "M-001",
+      "evidence_id": "E-001",
+      "locator": "input://pilot-001/E-001",
       "name": "ローカルLLM＋人間確認",
       "facts": [
         "AI処理時間は1件2秒",
@@ -16,7 +17,8 @@
       ]
     },
     {
-      "material_id": "M-002",
+      "evidence_id": "E-002",
+      "locator": "input://pilot-001/E-002",
       "name": "クラウドLLM＋人間確認",
       "facts": [
         "AI処理時間は1件4秒",
@@ -28,7 +30,8 @@
       ]
     },
     {
-      "material_id": "M-003",
+      "evidence_id": "E-003",
+      "locator": "input://pilot-001/E-003",
       "name": "人間のみ",
       "facts": [
         "平均処理時間は1件90秒",
