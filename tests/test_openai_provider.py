@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -22,6 +23,7 @@ class FakeResponse:
     output_text: str
     status: str = "completed"
     model: str = "test-model-version"
+    incomplete_details: Any | None = None
 
 
 class FakeResponsesResource:
@@ -167,7 +169,11 @@ def test_openai_provider_completes_orchestrator_with_mocked_http() -> None:
 
 def test_provider_rejects_non_completed_response() -> None:
     resource = FakeResponsesResource(
-        FakeResponse(output_text="{}", status="incomplete")
+        FakeResponse(
+            output_text="{}",
+            status="incomplete",
+            incomplete_details=SimpleNamespace(reason="max_output_tokens"),
+        )
     )
     provider = OpenAIProvider(
         model="test-model",
@@ -176,7 +182,7 @@ def test_provider_rejects_non_completed_response() -> None:
 
     with pytest.raises(
         OpenAIProviderResponseError,
-        match="expected 'completed'",
+        match="reason was 'max_output_tokens'",
     ):
         provider.run_agent(
             "researcher",
