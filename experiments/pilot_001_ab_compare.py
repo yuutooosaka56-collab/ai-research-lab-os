@@ -5,6 +5,7 @@ B: one structured single-model answer
 C: the three-agent AI Research Lab OS pipeline
 
 This script makes five paid API calls only when --execute is supplied.
+All systems use the same reasoning effort and output-token limit.
 """
 
 from __future__ import annotations
@@ -54,19 +55,40 @@ class UsageTotals:
 
 
 class TrackingResponses:
-    def __init__(self, inner: Any, usage: UsageTotals) -> None:
+    def __init__(
+        self,
+        inner: Any,
+        usage: UsageTotals,
+        *,
+        reasoning_effort: str,
+    ) -> None:
         self._inner = inner
         self._usage = usage
+        self._reasoning_effort = reasoning_effort
 
     def create(self, **kwargs: Any) -> Any:
+        kwargs.setdefault(
+            "reasoning",
+            {"effort": self._reasoning_effort},
+        )
         response = self._inner.create(**kwargs)
         self._usage.add_response(response)
         return response
 
 
 class TrackingClient:
-    def __init__(self, inner: Any, usage: UsageTotals) -> None:
-        self.responses = TrackingResponses(inner.responses, usage)
+    def __init__(
+        self,
+        inner: Any,
+        usage: UsageTotals,
+        *,
+        reasoning_effort: str,
+    ) -> None:
+        self.responses = TrackingResponses(
+            inner.responses,
+            usage,
+            reasoning_effort=reasoning_effort,
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -98,18 +120,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-output-tokens",
         type=int,
-        default=6000,
+        default=8000,
+    )
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=("low", "medium", "high"),
+        default="low",
+        help="Use the same reasoning effort for A, B, and C.",
     )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.timeout_seconds <= 0:
-        print("ERROR: --timeout-seconds must be positive", file=sys.stderr)
-        return 2
+
     if args.max_output_tokens < 1:
         print("ERROR: --max-output-tokens must be at least 1", file=sys.stderr)
+        return 2
+    if args.timeout_seconds <= 0:
+        print("ERROR: --timeout-seconds must be positive", file=sys.stderr)
         return 2
 
     try:
@@ -125,6 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Model: {model or '<not set>'}")
     print("Systems: A=direct, B=structured single model, C=three-agent OS")
     print("Paid model calls: 5 total (1 + 1 + 3)")
+    print(f"Reasoning effort: {args.reasoning_effort}")
+    print(f"Max output tokens per call: {args.max_output_tokens}")
+    print("Execution order: C, A, B")
 
     if not args.execute:
         print("DRY RUN: no API request was sent.")
@@ -151,10 +183,21 @@ def main(argv: list[str] | None = None) -> int:
     shared_input = _shared_input(case)
 
     try:
+        print("\nRunning C: three-agent OS (3 calls)...")
+        os_result = _run_os_answer(
+            client=base_client,
+            model=model,
+            case=case,
+            timeout_seconds=args.timeout_seconds,
+            max_output_tokens=args.max_output_tokens,
+            reasoning_effort=args.reasoning_effort,
+        )
+        print("Running A: direct single model (1 call)...")
         direct = _run_single_answer(
             client=base_client,
             model=model,
             usage=UsageTotals(),
+            reasoning_effort=args.reasoning_effort,
             instructions=(
                 "固定資料だけを使って質問に直接答えてください。"
                 "資料にない事実を追加せず、採用案、却下案、計算根拠、"
@@ -163,10 +206,12 @@ def main(argv: list[str] | None = None) -> int:
             input_text=shared_input,
             max_output_tokens=args.max_output_tokens,
         )
+        print("Running B: structured single model (1 call)...")
         structured = _run_single_answer(
             client=base_client,
             model=model,
             usage=UsageTotals(),
+            reasoning_effort=args.reasoning_effort,
             instructions=(
                 "固定資料だけを使って回答してください。次の順序で検討し、"
                 "最終回答には各項目を明示してください："
@@ -174,13 +219,6 @@ def main(argv: list[str] | None = None) -> int:
                 "5.不確実性、6.追加検証。資料にない事実は追加しないでください。"
             ),
             input_text=shared_input,
-            max_output_tokens=args.max_output_tokens,
-        )
-        os_result = _run_os_answer(
-            client=base_client,
-            model=model,
-            case=case,
-            timeout_seconds=args.timeout_seconds,
             max_output_tokens=args.max_output_tokens,
         )
     except AgentValidationError as exc:
@@ -221,6 +259,8 @@ def main(argv: list[str] | None = None) -> int:
         "experiment_id": case["experiment_id"],
         "created_at": datetime.now(timezone.utc).isoformat(),
         "model": model,
+        "reasoning_effort": args.reasoning_effort,
+        "max_output_tokens": args.max_output_tokens,
         "case": case,
         "systems": systems,
         "blind_mapping": blind_mapping,
@@ -272,11 +312,16 @@ def _run_single_answer(
     client: Any,
     model: str,
     usage: UsageTotals,
+    reasoning_effort: str,
     instructions: str,
     input_text: str,
     max_output_tokens: int,
 ) -> dict[str, Any]:
-    tracked = TrackingClient(client, usage)
+    tracked = TrackingClient(
+        client,
+        usage,
+        reasoning_effort=reasoning_effort,
+    )
     started = perf_counter()
     response = tracked.responses.create(
         model=model,
@@ -288,7 +333,11 @@ def _run_single_answer(
     status = getattr(response, "status", None)
     output_text = getattr(response, "output_text", None)
     if status != "completed":
-        raise RuntimeError(f"single-model response status was {status!r}")
+        reason = _incomplete_reason(response)
+        detail = f", reason={reason!r}" if reason else ""
+        raise RuntimeError(
+            f"single-model response status was {status!r}{detail}"
+        )
     if not isinstance(output_text, str) or not output_text.strip():
         raise RuntimeError("single-model response contained no output_text")
     return {
@@ -305,9 +354,14 @@ def _run_os_answer(
     case: dict[str, Any],
     timeout_seconds: float,
     max_output_tokens: int,
+    reasoning_effort: str,
 ) -> dict[str, Any]:
     usage = UsageTotals()
-    tracked = TrackingClient(client, usage)
+    tracked = TrackingClient(
+        client,
+        usage,
+        reasoning_effort=reasoning_effort,
+    )
     provider = OpenAIProvider(
         model=model,
         client=tracked,
@@ -349,26 +403,22 @@ def _build_blind_document(
         "QUESTION",
         case["question"],
         "",
-        "FIXED MATERIALS",
+        "FIXED MATERIALS AND CONSTRAINTS",
+        json.dumps(
+            {
+                "materials": case["materials"],
+                "constraints": case["constraints"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        "",
+        "SCORING",
+        "各回答を0～5点で採点：正確性、根拠対応、推論、反証、"
+        "不確実性、網羅性、実行可能性、明瞭さ。",
+        "回答の長さや文体だけで優劣を決めない。",
+        "",
     ]
-    for material in case["materials"]:
-        lines.append(
-            f"{material['material_id']} | {material['name']}"
-        )
-        lines.extend(f"- {fact}" for fact in material["facts"])
-        lines.append("")
-    lines.append("CONSTRAINTS")
-    lines.extend(f"- {constraint}" for constraint in case["constraints"])
-    lines.extend(
-        [
-            "",
-            "SCORING",
-            "各回答を0～5点で採点：正確性、根拠対応、推論、反証、"
-            "不確実性、網羅性、実行可能性、明瞭さ。",
-            "回答の長さや文体だけで優劣を決めない。",
-            "",
-        ]
-    )
     for blind_label in ("X", "Y", "Z"):
         system_key = mapping[blind_label]
         lines.extend(
@@ -384,6 +434,12 @@ def _build_blind_document(
             ]
         )
     return "\n".join(lines)
+
+
+def _incomplete_reason(response: Any) -> str | None:
+    details = getattr(response, "incomplete_details", None)
+    reason = getattr(details, "reason", None)
+    return reason if isinstance(reason, str) and reason else None
 
 
 def _as_int(value: Any) -> int:
