@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from .common import COMMON_INSTRUCTIONS, PromptBundle, build_input
+from .common import (
+    COMMON_INSTRUCTIONS,
+    HARD_CONSTRAINT_INSTRUCTIONS,
+    PromptBundle,
+    build_input,
+)
 
 _OUTPUT_CONTRACT = """
 {
@@ -62,9 +67,37 @@ alternative explanations. Do not oppose claims merely to create disagreement.
 Only reference Claim IDs and Evidence IDs that exist in the supplied Researcher
 payload. If a counterargument has no supplied evidence, use an empty evidence
 array and describe it as a possibility rather than an established fact.
+
+Objection eligibility test.
+Every entry in `issues`, `counterarguments`, and `alternative_hypotheses` must
+satisfy all four checks below. If an objection fails any one of them, do not
+output it at all.
+1. Constraint-compatible: it holds without relaxing, changing, or ignoring any
+   hard constraint.
+2. Grounded: the supplied materials support it.
+3. Decision-relevant: it explains a specific causal chain or calculation that
+   would change the conclusion under the fixed conditions.
+4. Sound: its arithmetic and its logic hold.
+
+Prohibited objections:
+- Any objection that assumes additional people, additional shifts, overtime,
+  outsourcing, a longer working day, automatic approval, or full automation
+  that the supplied materials do not state.
+- Any objection that parallelization, batching, asynchronous processing, or
+  pipelining could make an option feasible when it does not reduce the total
+  human working time that option requires. Reordering work does not change that
+  total, so it cannot resolve a staffing or working-hour constraint.
+- Vague possibility statements such as "this might be improvable" that change
+  no constrained quantity.
+Leaving an array empty is better than filling it with objections that fail this
+test. Report genuine agreement through `surviving_strengths` instead.
 """.strip()
     return PromptBundle(
-        instructions=f"{COMMON_INSTRUCTIONS}\n\n{role_instructions}",
+        instructions=(
+            f"{COMMON_INSTRUCTIONS}\n\n"
+            f"{HARD_CONSTRAINT_INSTRUCTIONS}\n\n"
+            f"{role_instructions}"
+        ),
         input=build_input(
             role="skeptic",
             request=request,

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from .common import COMMON_INSTRUCTIONS, PromptBundle, build_input
+from .common import (
+    COMMON_INSTRUCTIONS,
+    HARD_CONSTRAINT_INSTRUCTIONS,
+    PromptBundle,
+    build_input,
+)
 
 _OUTPUT_CONTRACT = """
 {
@@ -89,9 +94,21 @@ Identifier rules are strict:
   in title, locator, or notes; do not copy it into evidence_id.
 - User-supplied fixed materials must use source_type `user_supplied` and must not
   be relabeled as model_memory.
+
+Hard-constraint handling for this role:
+- Test every option against the hard constraints before assigning confidence,
+  and show the arithmetic you used.
+- The `assumptions` array is for uncertain premises only. Never place a hard
+  constraint there.
+- When an option fails a hard constraint, record that failure as a claim with
+  its calculation. Do not soften it into an unknown or a limitation.
 """.strip()
     return PromptBundle(
-        instructions=f"{COMMON_INSTRUCTIONS}\n\n{role_instructions}",
+        instructions=(
+            f"{COMMON_INSTRUCTIONS}\n\n"
+            f"{HARD_CONSTRAINT_INSTRUCTIONS}\n\n"
+            f"{role_instructions}"
+        ),
         input=build_input(
             role="researcher",
             request=request,
