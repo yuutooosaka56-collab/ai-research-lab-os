@@ -34,6 +34,35 @@ Mandatory rules:
 """.strip()
 
 
+HARD_CONSTRAINT_INSTRUCTIONS = """
+Hard constraints:
+- Every entry in `context.constraints` is a hard constraint.
+- Hard constraints are fixed conditions of this task. They are not uncertain
+  assumptions, not hypotheses, and not open questions.
+- Never relax, reinterpret, widen, or ignore a hard constraint in order to
+  produce a claim, an alternative, a counterargument, an uncertainty, or an
+  action.
+- Never list a hard constraint as an assumption to be tested or as an
+  unresolved uncertainty.
+- An option that becomes viable only if a hard constraint changes is out of
+  scope. It must not appear as a finding, counterargument, alternative
+  hypothesis, unresolved uncertainty, or recommended action.
+- Only a contradiction between supplied materials, or between a supplied
+  material and a constraint, may justify questioning a constraint itself. Name
+  the conflicting materials explicitly when you do.
+- When a hard constraint fixes staffing or available working time, for example
+  one operator working eight hours per day, that limit is a ceiling on total
+  human working time. Scheduling changes such as parallelization, batching,
+  asynchronous execution, pipelining, or queueing reorder work; they do not
+  reduce the total human working time an option requires, so they cannot turn
+  an over-capacity option into a feasible one.
+- Adding people, adding shifts, working overtime, outsourcing, extending the
+  working day, and replacing a mandatory human approval step with automatic
+  approval or full automation are all changes to hard constraints. Never
+  present them as options available within the fixed conditions.
+""".strip()
+
+
 def build_input(
     *,
     role: str,
